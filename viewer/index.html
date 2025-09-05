@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>Windborne Constellation – CARTO Viewer</title>
+	<link href="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.css" rel="stylesheet" />
+	<style>
+		html, body, #map { height: 100%; margin: 0; padding: 0; }
+		#layout { position: absolute; inset: 0; display: grid; grid-template-columns: 280px 1fr; grid-template-rows: 1fr; }
+		#sidebar {
+			background: rgba(255,255,255,0.96);
+			border-right: 1px solid rgba(0,0,0,0.1);
+			box-shadow: 1px 0 4px rgba(0,0,0,0.06);
+			font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+			font-size: 13px;
+			line-height: 1.35;
+			display: flex;
+			flex-direction: column;
+		}
+		#sidebar header { padding: 12px 12px 6px; font-weight: 600; }
+		#stats { padding: 6px 12px 12px; overflow: auto; }
+		#stats table { width: 100%; border-collapse: collapse; }
+		#stats td { padding: 4px 0; }
+		#stats td:first-child { opacity: 0.7; }
+		#map { min-width: 0; min-height: 0; width: 100%; height: 100%; display: block; }
+		#controls {
+			position: absolute;
+			top: 12px;
+			left: 300px;
+			background: rgba(255,255,255,0.95);
+			border-radius: 6px;
+			box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+			padding: 8px 10px;
+			font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+			font-size: 12px;
+			line-height: 1.2;
+			display: flex;
+			gap: 8px;
+			align-items: center;
+			white-space: nowrap;
+		}
+		#controls input[type="range"] { width: 260px; }
+		#controls #play { width: 28px; text-align: center; }
+		#timeLabel { display: inline-block; min-width: 48ch; font-variant-numeric: tabular-nums; }
+		#legend {
+			position: absolute;
+			bottom: 12px;
+			right: 12px;
+			background: rgba(255,255,255,0.9);
+			border-radius: 6px;
+			box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+			padding: 8px 10px;
+			font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+			font-size: 12px;
+			line-height: 1.2;
+		}
+		/* Default fallback gradient; will be overridden dynamically by JS */
+		#legend .bar { width: 180px; height: 10px; background: linear-gradient(90deg, #30123b, #0057ff, #00d7e5, #7af52c, #ffd100, #ff3800); margin: 6px 0; border-radius: 3px; }
+		/* Modal for distances */
+		#modalOverlay {
+			position: fixed;
+			inset: 0;
+			display: none;
+			align-items: center;
+			justify-content: center;
+			background: rgba(0,0,0,0.4);
+			z-index: 1000;
+		}
+		#modalContent {
+			background: #fff;
+			border-radius: 8px;
+			box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+			padding: 12px 12px 10px;
+			width: min(1000px, 92vw);
+			max-height: 88vh;
+			overflow: auto;
+			font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+			font-size: 13px;
+		}
+		#modalHeader { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+		#modalClose { border: 0; background: transparent; font-size: 18px; line-height: 1; cursor: pointer; }
+		#distModalCanvas { width: 100%; height: 360px; display: block; border: 1px solid rgba(0,0,0,0.08); }
+		#distModalMeta { opacity: 0.75; font-size: 12px; margin-top: 6px; }
+		#planeDistCanvas { width: 100%; height: 360px; display: block; border: 1px solid rgba(0,0,0,0.08); margin-top: 10px; }
+		#planeDistMeta { opacity: 0.75; font-size: 12px; margin-top: 6px; }
+	</style>
+</head>
+<body>
+	<div id="layout">
+		<aside id="sidebar">
+			<header>Constellation stats</header>
+			<div id="stats">
+				<table>
+					<tbody>
+						<tr><td>Window</td><td id="stat-window">—</td></tr>
+						<tr><td>Points in window</td><td id="stat-count">—</td></tr>
+						<tr><td>Balloons in view (latest hour)</td><td id="stat-in-view">—</td></tr>
+						<tr><td>Altitude min</td><td id="stat-alt-min">—</td></tr>
+						<tr><td>Altitude p25</td><td id="stat-alt-p25">—</td></tr>
+						<tr><td>Altitude median</td><td id="stat-alt-med">—</td></tr>
+						<tr><td>Altitude p75</td><td id="stat-alt-p75">—</td></tr>
+						<tr><td>Altitude max</td><td id="stat-alt-max">—</td></tr>
+						<tr><td>Altitude mean</td><td id="stat-alt-mean">—</td></tr>
+						<tr><td>Latest record</td><td id="stat-latest">—</td></tr>
+					</tbody>
+				</table>
+				<!-- Distance histogram moved to modal -->
+			</div>
+		</aside>
+		<div id="map"></div>
+	</div>
+	<div id="controls">
+		<button id="play" title="Play/Pause">▶</button>
+		<input id="time" type="range" min="0" max="100" value="0" step="60000" />
+		<span id="timeLabel">—</span>
+		<button id="openDistances" title="Balloon-to-balloon distances">Distance histograms</button>
+		<label>Window
+			<select id="window">
+				<option value="3600000">1h</option>
+				<option value="7200000" selected>2h</option>
+				<option value="10800000">3h</option>
+				<option value="21600000">6h</option>
+				<option value="86400000">24h</option>
+			</select>
+		</label>
+		<label title="Show current aircraft positions from OpenSky (rate-limited)">
+			<input id="liveToggle" type="checkbox" /> Live aircraft
+		</label>
+		<span id="liveStatus" style="opacity:0.75"></span>
+		<span style="opacity:0.4">|</span>
+		<span id="dataStatus" style="opacity:0.75"></span>
+	</div>
+	<div id="legend">
+		<div><strong>Altitude</strong> (meters)</div>
+		<div class="bar"></div>
+		<div style="display:flex; justify-content: space-between;">
+			<span>0</span>
+			<span>10k</span>
+			<span>20k+</span>
+		</div>
+		<div style="display:flex; align-items:center; gap:16px; margin-top:8px;">
+			<span style="display:inline-flex; align-items:center; gap:6px;">
+				<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+					<circle cx="7" cy="7" r="5" fill="#666" />
+				</svg>
+				<span>Balloons</span>
+			</span>
+			<span style="display:inline-flex; align-items:center; gap:6px;">
+				<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+					<path d="M7 1 L13 7 L7 13 L1 7 Z" fill="#666" />
+				</svg>
+				<span>Aircraft</span>
+			</span>
+		</div>
+	</div>
+
+	<!-- Modal for distances -->
+	<div id="modalOverlay">
+		<div id="modalContent">
+			<div id="modalHeader">
+				<div><strong>Balloon-to-balloon distances</strong> (km)</div>
+				<button id="modalClose" aria-label="Close">✕</button>
+			</div>
+			<canvas id="distModalCanvas" width="960" height="360"></canvas>
+			<div id="distModalMeta">—</div>
+			<div style="margin-top:12px; border-top: 1px solid rgba(0,0,0,0.06); padding-top: 8px;"><strong>Balloon-to-aircraft distances</strong> (km)</div>
+			<canvas id="planeDistCanvas" width="960" height="360"></canvas>
+			<div id="planeDistMeta">—</div>
+		</div>
+	</div>
+
+	<script src="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.js"></script>
+	<script src="https://unpkg.com/deck.gl@8.9.36/dist.min.js"></script>
+	<script src="https://unpkg.com/@deck.gl/mapbox@8.9.36/dist.min.js"></script>
+	<script src="./app.js"></script>
+</body>
+</html>
+
+
