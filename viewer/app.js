@@ -140,7 +140,16 @@
 			const lists = Object.values(obj).filter(v => Array.isArray(v));
 			if (lists.length) {
 				const best = lists.reduce((a, b) => (a.length >= b.length ? a : b));
-				for (const rec of best) if (rec && typeof rec === 'object') out.push([null, rec]);
+				for (const rec of best) {
+					if (rec && typeof rec === 'object' && !Array.isArray(rec)) {
+						out.push([null, rec]);
+					} else if (Array.isArray(rec) && rec.length >= 2) {
+						const [lat, lon, altkm] = rec;
+						const r = { lat, lon };
+						if (altkm != null) r.altkm = altkm;
+						out.push([null, r]);
+					}
+				}
 				return out;
 			}
 			const allDicts = Object.values(obj).every(v => v && typeof v === 'object' && !Array.isArray(v));
