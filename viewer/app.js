@@ -139,7 +139,18 @@
 		if (obj && typeof obj === 'object') {
 			const lists = Object.values(obj).filter(v => Array.isArray(v));
 			if (lists.length) {
-				const best = lists.reduce((a, b) => (a.length >= b.length ? a : b));
+				// Prefer arrays whose elements are objects or coordinate tuples over primitive arrays
+				const scored = lists.map(arr => {
+					let score = 0;
+					if (arr.length) {
+						const first = arr[0];
+						if (first && typeof first === 'object' && !Array.isArray(first)) score = 3;
+						else if (Array.isArray(first) && first.length >= 2) score = 2;
+						else score = 1; // primitive array
+					}
+					return { arr, score };
+				});
+				const best = scored.sort((x, y) => (y.score - x.score) || (y.arr.length - x.arr.length))[0].arr;
 				for (const rec of best) {
 					if (rec && typeof rec === 'object' && !Array.isArray(rec)) {
 						out.push([null, rec]);
