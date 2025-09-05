@@ -173,6 +173,21 @@
 	<script src="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.js"></script>
 	<script src="https://unpkg.com/deck.gl@8.9.36/dist.min.js"></script>
 	<script src="https://unpkg.com/@deck.gl/mapbox@8.9.36/dist.min.js"></script>
+	<script>
+		(function () {
+			try {
+				var url = new URL(window.location.href);
+				var api = url.searchParams.get('api_base');
+				if (api) {
+					window.WB_API_BASE = String(api).replace(/\/$/, '');
+				}
+				var disable = url.searchParams.get('disable_api');
+				if (disable === '1' || disable === 'true') {
+					window.WB_DISABLE_API = true;
+				}
+			} catch (e) {}
+		})();
+	</script>
 	<script src="./app.js"></script>
 </body>
 </html>
