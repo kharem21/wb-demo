@@ -592,6 +592,15 @@
 			metaEl.textContent = `${positions.length} balloon(s) in view — not enough for pair distances`;
 			return;
 		}
+		// Guard against excessive pairwise computations when too many balloons are in view
+		// Pair count grows as n*(n-1)/2; limit to keep UI responsive and instruct user to zoom in
+		const n = positions.length;
+		const pairCount = (n * (n - 1)) / 2;
+		if (pairCount > 200000) {
+			renderHistogram(canvas, [], 1);
+			metaEl.textContent = `${formatNum(n)} balloons in view — too many pair distances (~${formatNum(pairCount)}). Zoom in to compute`;
+			return;
+		}
 		const distances = [];
 		for (let i = 0; i < positions.length; i++) {
 			const [lonA, latA] = positions[i];
