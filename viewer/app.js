@@ -126,12 +126,13 @@
 		if (obj == null) return out;
 		if (Array.isArray(obj)) {
 			for (const rec of obj) {
-				if (rec && typeof rec === 'object') out.push([null, rec]);
-				else if (Array.isArray(rec) && rec.length >= 2) {
+				if (Array.isArray(rec) && rec.length >= 2) {
 					const [lat, lon, altkm] = rec;
 					const r = { lat, lon };
 					if (altkm != null) r.altkm = altkm;
 					out.push([null, r]);
+				} else if (rec && typeof rec === 'object') {
+					out.push([null, rec]);
 				}
 			}
 			return out;
